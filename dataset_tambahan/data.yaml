@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['danger', 'safe']
+
+roboflow:
+  workspace: fidel-cristopher
+  project: computer-vision-wjtue
+  version: dataset
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/fidel-cristopher/computer-vision-wjtue/dataset/dataset

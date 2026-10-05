@@ -1,0 +1,6 @@
+path: c:/Users/Pongo/train-detector/custom_dataset
+train: train/images
+val: valid/images
+
+nc: 3
+names: ['barrier_closed', 'barrier_open', 'obstacle']

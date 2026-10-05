@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 3
+names: ['barrier_closed', 'barrier_open', 'obstacle']
+
+roboflow:
+  workspace: fidel-cristopher
+  project: computer-detection-mpjsr
+  version: dataset
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/fidel-cristopher/computer-detection-mpjsr/dataset/dataset

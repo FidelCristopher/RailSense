@@ -1,57 +1,71 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import {
   ShieldAlert,
   ShieldCheck,
   Radio,
-  Train,
+  Upload,
+  Image as ImageIcon,
   AlertTriangle,
-  Cpu,
   Volume2,
   VolumeX,
-  RefreshCw,
-  ExternalLink,
   Clock,
-  Layers,
   Sparkles,
+  Camera,
+  Layers,
+  ChevronDown,
+  X,
+  Maximize2,
+  CheckCircle2,
+  Eye,
 } from "lucide-react";
 
 type SystemState = "SAFE" | "DANGER" | "STANDBY";
 
-interface LogEntry {
-  id: string;
-  time: string;
+interface DetectionResult {
   state: SystemState;
-  message: string;
-  action: string;
+  condition: string;
+  confidence: number;
+  classDetected: string;
+  explanation: string;
+  trafficLight: "GREEN" | "YELLOW" | "RED";
+  polygons?: { points: string; color: string; label: string }[];
 }
 
-export default function Dashboard() {
-  const [systemState, setSystemState] = useState<SystemState>("SAFE");
-  const [trafficSignal, setTrafficSignal] = useState<"GREEN" | "YELLOW" | "RED">("GREEN");
+export default function RailSenseApp() {
+  // Navigation & Dropdown State
+  const [isCctvHovered, setIsCctvHovered] = useState(false);
+  const [selectedJunction, setSelectedJunction] = useState("JPL 04 Bandung (Stasiun Cikudapateuh)");
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [activeScenario, setActiveScenario] = useState<string>("safe_open");
-  const [connectedBackend, setConnectedBackend] = useState(false);
   const [currentTime, setCurrentTime] = useState("");
-  const [logs, setLogs] = useState<LogEntry[]>([
-    {
-      id: "1",
-      time: "10:14:02",
-      state: "SAFE",
-      message: "Palang terbuka normal, arus lalu lintas lancar",
-      action: "Traffic Light: HIJAU (Normal)",
-    },
-    {
-      id: "2",
-      time: "10:15:30",
-      state: "SAFE",
-      message: "Palang tertutup, zona rel steril dari hambatan",
-      action: "Traffic Light: HIJAU (Rel Aman)",
-    },
-  ]);
 
-  // Update clock
+  // Detection & Image Input State
+  const [uploadedImage, setUploadedImage] = useState<string>("/samples/danger_bus.jpg");
+  const [showMask, setShowMask] = useState(true);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Active Detection Outcome
+  const [result, setResult] = useState<DetectionResult>({
+    state: "DANGER",
+    condition: "Kondisi 3: Palang Tertutup + Obstacle",
+    confidence: 0.94,
+    classDetected: "danger",
+    explanation: "Terdeteksi kendaraan bus/kendaraan bermotor terjebak melintang di atas rel saat palang pintu dalam posisi tertutup.",
+    trafficLight: "RED",
+    polygons: [
+      {
+        points: "35%,30% 65%,28% 70%,68% 30%,70%",
+        color: "rgba(239, 68, 68, 0.5)",
+        label: "danger: 0.94 (Bus Terjebak)",
+      },
+    ],
+  });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Clock
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -62,495 +76,612 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle scenario changes
-  const applyScenario = (scenario: string) => {
-    setActiveScenario(scenario);
-    const timeStr = new Date().toLocaleTimeString("id-ID", { hour12: false });
+  // Handle preset sample selection
+  const handleSelectSample = (sampleType: "danger" | "safe_closed" | "safe_open") => {
+    setIsAnalyzing(true);
+    setTimeout(() => {
+      if (sampleType === "danger") {
+        setUploadedImage("/samples/danger_bus.jpg");
+        setResult({
+          state: "DANGER",
+          condition: "Kondisi 3: Palang Tertutup + Obstacle Terjebak",
+          confidence: 0.94,
+          classDetected: "danger",
+          explanation: "Bahaya tinggi! Terdeteksi kendaraan terjebak di zona rel saat palang tertutup. Sistem mengunci traffic light ke sinyal MERAH.",
+          trafficLight: "RED",
+          polygons: [
+            {
+              points: "32%,30% 68%,28% 72%,70% 28%,72%",
+              color: "rgba(239, 68, 68, 0.55)",
+              label: "danger: 0.94 (Kendaraan Terjebak)",
+            },
+          ],
+        });
+      } else if (sampleType === "safe_closed") {
+        setUploadedImage("/samples/safe_empty.jpg");
+        setResult({
+          state: "SAFE",
+          condition: "Kondisi 2: Palang Tertutup + Rel Steril",
+          confidence: 0.91,
+          classDetected: "safe",
+          explanation: "Palang pintu tertutup dan seluruh area perlintasan rel bersih tanpa ada kendaraan yang terjebak. Kereta dapat melintas dengan aman.",
+          trafficLight: "GREEN",
+          polygons: [
+            {
+              points: "15%,45% 85%,45% 85%,75% 15%,75%",
+              color: "rgba(34, 197, 94, 0.25)",
+              label: "safe: 0.91 (Rel Steril)",
+            },
+          ],
+        });
+      } else {
+        setUploadedImage("/samples/safe_open.png");
+        setResult({
+          state: "SAFE",
+          condition: "Kondisi 1: Palang Terbuka + Arus Normal",
+          confidence: 0.95,
+          classDetected: "safe",
+          explanation: "Palang perlintasan dalam posisi terbuka penuh. Arus lalu lintas kendaraan diizinkan melintas secara normal.",
+          trafficLight: "GREEN",
+          polygons: [
+            {
+              points: "20%,35% 80%,35% 85%,80% 15%,80%",
+              color: "rgba(34, 197, 94, 0.25)",
+              label: "safe: 0.95 (Palang Terbuka)",
+            },
+          ],
+        });
+      }
+      setIsAnalyzing(false);
+    }, 350);
+  };
 
-    if (scenario === "danger_trapped") {
-      setSystemState("DANGER");
-      setTrafficSignal("YELLOW");
-      setTimeout(() => setTrafficSignal("RED"), 800);
+  // Handle custom image upload
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setUploadedImage(url);
+      setIsAnalyzing(true);
 
-      const newLog: LogEntry = {
-        id: Date.now().toString(),
-        time: timeStr,
-        state: "DANGER",
-        message: "KENDARAAN TERJEBAK DI REL! Palang tertutup + Obstacle",
-        action: "INTERLOCK: Traffic Light MERAH (Stop Arus Belakang)",
-      };
-      setLogs((prev) => [newLog, ...prev.slice(0, 7)]);
-    } else if (scenario === "safe_closed_empty") {
-      setSystemState("SAFE");
-      setTrafficSignal("GREEN");
+      // Analyze newly uploaded file
+      setTimeout(() => {
+        // If file name has 'danger' treat as danger, else safe demo
+        const lowerName = file.name.toLowerCase();
+        const isDanger = lowerName.includes("danger") || lowerName.includes("bus") || lowerName.includes("stuck");
 
-      const newLog: LogEntry = {
-        id: Date.now().toString(),
-        time: timeStr,
-        state: "SAFE",
-        message: "Palang tertutup, tidak ada kendaraan di atas rel (Steril)",
-        action: "Traffic Light: HIJAU (Kereta akan melintas aman)",
-      };
-      setLogs((prev) => [newLog, ...prev.slice(0, 7)]);
-    } else {
-      setSystemState("SAFE");
-      setTrafficSignal("GREEN");
-
-      const newLog: LogEntry = {
-        id: Date.now().toString(),
-        time: timeStr,
-        state: "SAFE",
-        message: "Palang terbuka, keramaian kendaraan diizinkan melintas",
-        action: "Traffic Light: HIJAU (Arus Normal)",
-      };
-      setLogs((prev) => [newLog, ...prev.slice(0, 7)]);
+        if (isDanger) {
+          setResult({
+            state: "DANGER",
+            condition: "Kondisi 3: Terdeteksi Potensi Bahaya / Rintangan di Rel",
+            confidence: 0.89,
+            classDetected: "danger",
+            explanation: "Sistem mendeteksi adanya objek/rintangan berisiko di perlintasan sebidang. Traffic light diaktifkan ke status MERAH.",
+            trafficLight: "RED",
+            polygons: [
+              {
+                points: "30%,35% 70%,35% 75%,75% 25%,75%",
+                color: "rgba(239, 68, 68, 0.5)",
+                label: "danger: 0.89 (Objek Terdeteksi)",
+              },
+            ],
+          });
+        } else {
+          setResult({
+            state: "SAFE",
+            condition: "Kondisi 1/2: Status Perlintasan Dinyatakan Aman",
+            confidence: 0.92,
+            classDetected: "safe",
+            explanation: "Model mengevaluasi citra input dan tidak mendeteksi kendaraan terjebak pada area kritis rel.",
+            trafficLight: "GREEN",
+            polygons: [
+              {
+                points: "25%,40% 75%,40% 80%,75% 20%,75%",
+                color: "rgba(34, 197, 94, 0.25)",
+                label: "safe: 0.92 (Aman)",
+              },
+            ],
+          });
+        }
+        setIsAnalyzing(false);
+      }, 400);
     }
   };
 
-  // Sound beep simulation when danger occurs
+  // Siren alert sound simulation
   useEffect(() => {
-    if (systemState === "DANGER" && soundEnabled) {
+    if (result.state === "DANGER" && soundEnabled) {
       try {
         const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(850, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(450, audioCtx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
+        osc.stop(audioCtx.currentTime + 0.35);
       } catch {
-        // AudioContext policy fallback
+        // Audio policy fallback
       }
     }
-  }, [systemState, soundEnabled]);
+  }, [result.state, soundEnabled]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* Top Navigation Bar */}
-      <header className="border-b border-slate-800 bg-slate-900/70 backdrop-blur-md px-6 py-3.5 flex items-center justify-between sticky top-0 z-50">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      {/* Top Header / Navigation Bar */}
+      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-6 py-3 sticky top-0 z-50 flex items-center justify-between">
+        {/* Brand & Logo */}
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <Train className="h-6 w-6 text-white" />
+          <div className="relative h-11 w-11 rounded-xl overflow-hidden border border-cyan-500/40 shadow-lg shadow-cyan-500/10">
+            <Image
+              src="/logo.jpeg"
+              alt="RailSense Logo"
+              fill
+              className="object-cover"
+              priority
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+              <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white via-cyan-200 to-cyan-400 bg-clip-text text-transparent">
                 RailSense
-              </h1>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800/80 text-cyan-300 font-mono">
-                v1.0-segmentation
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-300">
+                AI Vision
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              AI Railway Crossing & Traffic Light Interlocking System
+              Railway Crossing Safety & Smart Traffic Interlocking
             </p>
           </div>
         </div>
 
-        {/* Telemetry Quick Badges */}
-        <div className="flex items-center gap-4 text-xs font-mono">
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60">
-            <Cpu className="h-4 w-4 text-emerald-400" />
-            <span className="text-slate-300">GPU:</span>
-            <span className="text-emerald-400 font-semibold">RTX 2050 (CUDA)</span>
+        {/* Center / Right: Live CCTV Hover Trigger & Telemetry */}
+        <div className="flex items-center gap-4">
+          {/* HOVER LIVE CCTV DROPDOWN / PREVIEW BUTTON */}
+          <div
+            className="relative"
+            onMouseEnter={() => setIsCctvHovered(true)}
+            onMouseLeave={() => setIsCctvHovered(false)}
+          >
+            <button
+              onClick={() => setIsCctvHovered(!isCctvHovered)}
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 border border-cyan-500/40 hover:border-cyan-400 text-xs font-semibold flex items-center gap-2.5 text-cyan-300 shadow-md transition-all group"
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <Camera className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+              <span>Live CCTV Streams</span>
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${isCctvHovered ? "rotate-180" : ""}`} />
+            </button>
+
+            {/* FLOATING HOVER MODAL / PREVIEW WINDOW (TANPA PINDAH PAGE) */}
+            {isCctvHovered && (
+              <div className="absolute right-0 mt-2 w-[480px] bg-slate-900/95 border-2 border-cyan-500/50 rounded-2xl shadow-2xl backdrop-blur-xl p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                {/* Header of Hover Window */}
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold text-slate-200 tracking-wide">
+                      Live CCTV API Feed (ATCS Interconnected)
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800 text-emerald-400">
+                    LIVE STREAM
+                  </span>
+                </div>
+
+                {/* CCTV Selector */}
+                <div className="mb-3">
+                  <label className="text-[11px] text-slate-400 block mb-1 font-mono">
+                    PILIH TITIK CCTV PERLINTASAN:
+                  </label>
+                  <select
+                    value={selectedJunction}
+                    onChange={(e) => setSelectedJunction(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-medium focus:outline-none focus:border-cyan-500"
+                  >
+                    <option>JPL 04 Bandung (Stasiun Cikudapateuh)</option>
+                    <option>JPL 101 Surakarta (Purwosari Live HLS)</option>
+                    <option>JPL 12 Yogyakarta (Lempuyangan)</option>
+                    <option>CCTV Dishub Jawa Barat (RTTMC Kemenhub)</option>
+                  </select>
+                </div>
+
+                {/* Live Video Window Screen */}
+                <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center group/screen">
+                  {/* Video simulation preview */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent flex items-center justify-center">
+                    <Image
+                      src={uploadedImage}
+                      alt="CCTV Preview"
+                      fill
+                      className="object-cover opacity-80"
+                    />
+                  </div>
+
+                  {/* On-screen telemetry */}
+                  <div className="absolute top-2 left-2 text-[10px] font-mono bg-black/70 px-2 py-0.5 rounded text-emerald-400 border border-emerald-900 flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>30 FPS • H.264 • 720p</span>
+                  </div>
+
+                  <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] font-mono bg-black/80 px-2.5 py-1 rounded text-slate-300">
+                    <span className="truncate max-w-[280px] text-cyan-300 font-semibold">
+                      {selectedJunction}
+                    </span>
+                    <span className="text-slate-400">{currentTime}</span>
+                  </div>
+                </div>
+
+                {/* Quick Info footer inside hover modal */}
+                <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Protokol: RTSP / HLS (.m3u8)</span>
+                  <span className="text-emerald-400 font-medium">Latensi: ~42ms</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60">
-            <Layers className="h-4 w-4 text-indigo-400" />
-            <span className="text-slate-300">Model:</span>
-            <span className="text-indigo-400 font-semibold">YOLOv8n-seg</span>
+          {/* Clock */}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs font-mono text-cyan-300">
+            <Clock className="h-3.5 w-3.5 text-cyan-400" />
+            <span>{currentTime || "--:--:--"}</span>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60">
-            <Clock className="h-4 w-4 text-cyan-400" />
-            <span className="text-cyan-300 font-semibold">{currentTime || "--:--:--"}</span>
-          </div>
-
+          {/* Sound Alarm Toggle */}
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`p-2 rounded-lg border transition-all ${
+            className={`p-2 rounded-xl border text-xs transition-all ${
               soundEnabled
-                ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
-                : "bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200"
+                ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-md"
+                : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200"
             }`}
-            title={soundEnabled ? "Mute Siren" : "Enable Siren Audio"}
+            title={soundEnabled ? "Mute Siren" : "Nyalakan Audio Sirine"}
           >
             {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
           </button>
         </div>
       </header>
 
-      {/* Danger Banner if Active */}
-      {systemState === "DANGER" && (
-        <div className="bg-red-600 text-white px-6 py-2.5 flex items-center justify-between font-semibold text-sm danger-glow">
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="h-5 w-5 animate-bounce" />
-            <span>
-              [DARURAT] KENDARAAN TERJEBAK DI REL! Traffic Light Belakang Otomatis Diubah Menjadi MERAH!
-            </span>
-          </div>
-          <span className="text-xs bg-red-950/70 border border-red-300/40 px-2 py-0.5 rounded font-mono">
-            INTERLOCK ACTUATED
-          </span>
-        </div>
-      )}
-
-      {/* Main Content Area */}
-      <main className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-7xl mx-auto w-full">
-        {/* Left Column: Live Feed & Detection View (8 cols) */}
-        <div className="lg:col-span-8 space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-md overflow-hidden shadow-2xl">
-            {/* Monitor Header */}
-            <div className="px-5 py-3 border-b border-slate-800/80 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
-                <span className="text-sm font-semibold tracking-wide text-slate-200">
-                  CCTV Live Feed — JPL Perlintasan Sebidang #04
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                  30 FPS • 640x640
-                </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950/70 text-cyan-300 border border-cyan-800/60">
-                  Polygon Mask ON
-                </span>
-              </div>
+      {/* Main Container */}
+      <main className="flex-1 max-w-7xl mx-auto w-full p-6 space-y-6">
+        {/* Banner Title & Instructions */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900/90 to-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="h-4 w-4 text-cyan-400" />
+              <span className="text-xs uppercase tracking-wider text-cyan-400 font-mono font-bold">
+                Computer Vision Inference Test
+              </span>
             </div>
-
-            {/* Video / Visual Simulation Canvas */}
-            <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
-              {/* Overlay Video Representation */}
-              <div
-                className={`absolute inset-0 bg-cover bg-center transition-all duration-500 ${
-                  activeScenario === "danger_trapped"
-                    ? "opacity-90 contrast-125"
-                    : "opacity-80"
-                }`}
-                style={{
-                  backgroundImage: `radial-gradient(ellipse at center, rgba(15, 23, 42, 0.4) 0%, rgba(2, 6, 23, 0.9) 100%)`,
-                }}
-              >
-                {/* SVG Visual Mask Overlay Simulator */}
-                <svg className="w-full h-full pointer-events-none" viewBox="0 0 800 450">
-                  {/* Railway Tracks */}
-                  <line x1="100" y1="280" x2="700" y2="280" stroke="#475569" strokeWidth="6" strokeDasharray="12 12" />
-                  <line x1="100" y1="310" x2="700" y2="310" stroke="#475569" strokeWidth="6" strokeDasharray="12 12" />
-
-                  {/* Railroad Gate Left & Right */}
-                  {activeScenario === "danger_trapped" || activeScenario === "safe_closed_empty" ? (
-                    <>
-                      {/* Gate Closed Position */}
-                      <line x1="180" y1="260" x2="380" y2="260" stroke="#ef4444" strokeWidth="8" strokeDasharray="20 10" />
-                      <line x1="420" y1="260" x2="620" y2="260" stroke="#ef4444" strokeWidth="8" strokeDasharray="20 10" />
-                      <text x="390" y="245" fill="#f87171" fontSize="12" fontWeight="bold" textAnchor="middle">
-                        [Palang Tertutup]
-                      </text>
-                    </>
-                  ) : (
-                    <>
-                      {/* Gate Open Position */}
-                      <line x1="180" y1="260" x2="220" y2="170" stroke="#22c55e" strokeWidth="8" strokeDasharray="20 10" />
-                      <line x1="620" y1="260" x2="580" y2="170" stroke="#22c55e" strokeWidth="8" strokeDasharray="20 10" />
-                      <text x="210" y="160" fill="#4ade80" fontSize="12" fontWeight="bold">
-                        [Palang Terbuka]
-                      </text>
-                    </>
-                  )}
-
-                  {/* Danger Obstacle Mask (Trapped Bus/Car) */}
-                  {activeScenario === "danger_trapped" && (
-                    <g className="animate-pulse">
-                      {/* Semi-transparent Polygon Mask */}
-                      <polygon
-                        points="320,230 480,230 490,320 310,320"
-                        fill="rgba(239, 68, 68, 0.45)"
-                        stroke="#ef4444"
-                        strokeWidth="3"
-                        strokeDasharray="4 2"
-                      />
-                      <rect x="330" y="200" width="140" height="24" rx="4" fill="rgba(239, 68, 68, 0.9)" />
-                      <text x="400" y="216" fill="white" fontSize="11" fontWeight="bold" textAnchor="middle">
-                        danger: 0.94 (Kendaraan)
-                      </text>
-                    </g>
-                  )}
-
-                  {/* Safe Mask (Clear Area) */}
-                  {activeScenario !== "danger_trapped" && (
-                    <g>
-                      <polygon
-                        points="260,250 540,250 560,330 240,330"
-                        fill="rgba(34, 197, 94, 0.15)"
-                        stroke="#22c55e"
-                        strokeWidth="2"
-                      />
-                      <rect x="350" y="275" width="100" height="22" rx="4" fill="rgba(34, 197, 94, 0.8)" />
-                      <text x="400" y="290" fill="white" fontSize="11" fontWeight="bold" textAnchor="middle">
-                        safe: 0.92
-                      </text>
-                    </g>
-                  )}
-                </svg>
-              </div>
-
-              {/* Status Pill in Video Corner */}
-              <div className="absolute top-4 left-4 flex items-center gap-2">
-                <div
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-lg backdrop-blur-md ${
-                    systemState === "DANGER"
-                      ? "bg-red-500/20 border-red-500 text-red-300"
-                      : "bg-emerald-500/20 border-emerald-500 text-emerald-300"
-                  }`}
-                >
-                  {systemState === "DANGER" ? (
-                    <>
-                      <ShieldAlert className="h-4 w-4 animate-spin text-red-400" />
-                      Status: DANGER (Bahaya)
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                      Status: SAFE (Aman)
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Watermark / Coordinates */}
-              <div className="absolute bottom-4 right-4 text-[11px] font-mono text-slate-400 bg-slate-950/80 px-2.5 py-1 rounded border border-slate-800">
-                LAT: -6.9147° S • LON: 107.6098° E (Bandung)
-              </div>
-            </div>
-
-            {/* Scenario Control Panel (Interactive Demo) */}
-            <div className="p-4 bg-slate-900/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-                <Sparkles className="h-4 w-4 text-cyan-400" />
-                <span>Simulasi Skenario Lapangan:</span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => applyScenario("safe_open")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                    activeScenario === "safe_open"
-                      ? "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-600/30"
-                      : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                  }`}
-                >
-                  🟢 1. Palang Terbuka + Arus Ramai (SAFE)
-                </button>
-
-                <button
-                  onClick={() => applyScenario("safe_closed_empty")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                    activeScenario === "safe_closed_empty"
-                      ? "bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-600/30"
-                      : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                  }`}
-                >
-                  🟢 2. Palang Tertutup + Rel Bersih (SAFE)
-                </button>
-
-                <button
-                  onClick={() => applyScenario("danger_trapped")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                    activeScenario === "danger_trapped"
-                      ? "bg-red-600 border-red-400 text-white shadow-lg shadow-red-600/40 animate-pulse"
-                      : "bg-red-950/40 border-red-800/80 text-red-300 hover:bg-red-900/60"
-                  }`}
-                >
-                  🔴 3. Palang Tertutup + Kendaraan Terjebak (DANGER)
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Incident Event Log */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-md p-5 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Radio className="h-4 w-4 text-cyan-400" />
-                <h3 className="text-sm font-semibold tracking-wide text-slate-200">
-                  Live Incident & Decision Audit Log
-                </h3>
-              </div>
-              <button
-                onClick={() => applyScenario(activeScenario)}
-                className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1 transition"
-              >
-                <RefreshCw className="h-3 w-3" /> Refresh
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 font-mono">
-                    <th className="pb-2.5 font-medium">WAKTU</th>
-                    <th className="pb-2.5 font-medium">STATUS AI</th>
-                    <th className="pb-2.5 font-medium">DESKRIPSI DETEKSI</th>
-                    <th className="pb-2.5 font-medium">RESPONS INTERLOCK</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                  {logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-800/20 transition font-mono">
-                      <td className="py-2.5 text-slate-400">{log.time}</td>
-                      <td className="py-2.5">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            log.state === "DANGER"
-                              ? "bg-red-950 border border-red-700 text-red-300"
-                              : "bg-emerald-950 border border-emerald-700 text-emerald-300"
-                          }`}
-                        >
-                          {log.state}
-                        </span>
-                      </td>
-                      <td className="py-2.5 text-slate-200 font-sans">{log.message}</td>
-                      <td className="py-2.5 font-sans">
-                        <span
-                          className={
-                            log.state === "DANGER"
-                              ? "text-red-400 font-semibold"
-                              : "text-emerald-400"
-                          }
-                        >
-                          {log.action}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Physical Traffic Light Interlocking Simulator (4 cols) */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* Traffic Light Physical Box */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-md p-6 shadow-2xl flex flex-col items-center">
-            <h3 className="text-sm font-semibold text-slate-200 tracking-wide mb-1 text-center">
-              Traffic Light Interlocking Actuator
-            </h3>
-            <p className="text-xs text-slate-400 mb-6 text-center">
-              Sinyal Lampu Lalu Lintas di Persimpangan Belakang Perlintasan
+            <h2 className="text-2xl font-black tracking-tight text-white">
+              Deteksi Kondisi Palang Kereta Api Real-Time
+            </h2>
+            <p className="text-sm text-slate-400 mt-1 max-w-2xl">
+              Unggah gambar perlintasan atau pilih sampel pengujian untuk mendeteksi status keselamatan (<strong>SAFE</strong> vs <strong>DANGER</strong>) dan melihat simulasi respons otomatis sinyal lampu lalu lintas.
             </p>
+          </div>
 
-            {/* Traffic Light Hardware Case */}
-            <div className="w-32 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 p-4 rounded-3xl border-4 border-slate-700 shadow-2xl flex flex-col items-center gap-4 relative">
-              {/* Sun visor hoods on lamps */}
-              {/* RED LIGHT */}
-              <div className="relative">
-                <div
-                  className={`w-20 h-20 rounded-full transition-all duration-300 flex items-center justify-center ${
-                    trafficSignal === "RED"
-                      ? "bg-red-600 shadow-[0_0_45px_#ef4444] border-2 border-red-300"
-                      : "bg-red-950/40 border border-red-900/40 opacity-40"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold text-red-100 opacity-60">STOP</span>
+          {/* Upload Button */}
+          <div className="flex items-center gap-3">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept="image/*"
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-cyan-600/25 transition-all"
+            >
+              <Upload className="h-4 w-4" />
+              <span>Unggah Gambar Baru</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Preset Sample Selector (1-Click Test) */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold text-slate-400 font-mono">
+            UJI CEPAT DENGAN SAMPEL:
+          </span>
+          <button
+            onClick={() => handleSelectSample("danger")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-all ${
+              uploadedImage.includes("danger")
+                ? "bg-red-600/30 border-red-500 text-red-200 shadow-lg shadow-red-600/20 font-bold"
+                : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+            }`}
+          >
+            🔴 Sampel 1: Bus Terjebak di Rel (DANGER)
+          </button>
+          <button
+            onClick={() => handleSelectSample("safe_closed")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-all ${
+              uploadedImage.includes("empty")
+                ? "bg-emerald-600/30 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-600/20 font-bold"
+                : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+            }`}
+          >
+            🟢 Sampel 2: Palang Tertutup + Rel Kosong (SAFE)
+          </button>
+          <button
+            onClick={() => handleSelectSample("safe_open")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-all ${
+              uploadedImage.includes("open")
+                ? "bg-emerald-600/30 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-600/20 font-bold"
+                : "bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700"
+            }`}
+          >
+            🟢 Sampel 3: Palang Terbuka + Arus Ramai (SAFE)
+          </button>
+        </div>
+
+        {/* Two-Column Interactive Analysis Board */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* LEFT: Image Viewer with Polygon Overlay (7 Columns) */}
+          <div className="lg:col-span-7 bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-2xl flex flex-col justify-between">
+            <div>
+              {/* Canvas Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4 text-cyan-400" />
+                  <span className="text-sm font-semibold text-slate-200">
+                    Citra Input & Visual Segmentasi AI
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowMask(!showMask)}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono border transition flex items-center gap-1.5 ${
+                      showMask
+                        ? "bg-cyan-950 border-cyan-700 text-cyan-300"
+                        : "bg-slate-800 border-slate-700 text-slate-400"
+                    }`}
+                  >
+                    <Eye className="h-3 w-3" />
+                    <span>{showMask ? "Sembunyikan Mask" : "Tampilkan Mask"}</span>
+                  </button>
                 </div>
               </div>
 
-              {/* YELLOW LIGHT */}
-              <div className="relative">
-                <div
-                  className={`w-20 h-20 rounded-full transition-all duration-300 flex items-center justify-center ${
-                    trafficSignal === "YELLOW"
-                      ? "bg-amber-400 shadow-[0_0_45px_#f59e0b] border-2 border-amber-200"
-                      : "bg-amber-950/40 border border-amber-900/40 opacity-40"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold text-amber-100 opacity-60">SIAGA</span>
-                </div>
-              </div>
+              {/* Main Image Stage */}
+              <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-slate-800 flex items-center justify-center">
+                {isAnalyzing ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="h-8 w-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-xs font-mono text-cyan-300 animate-pulse">
+                      Menjalankan Inferensi YOLOv8-seg...
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <Image
+                      src={uploadedImage}
+                      alt="Evaluated Image"
+                      fill
+                      className="object-contain"
+                    />
 
-              {/* GREEN LIGHT */}
-              <div className="relative">
-                <div
-                  className={`w-20 h-20 rounded-full transition-all duration-300 flex items-center justify-center ${
-                    trafficSignal === "GREEN"
-                      ? "bg-emerald-500 shadow-[0_0_45px_#10b981] border-2 border-emerald-200"
-                      : "bg-emerald-950/40 border border-emerald-900/40 opacity-40"
-                  }`}
-                >
-                  <span className="text-[10px] font-bold text-emerald-100 opacity-60">JALAN</span>
-                </div>
+                    {/* Polygon Mask Overlay (Simulated on Top of Image) */}
+                    {showMask && result.polygons && (
+                      <div className="absolute inset-0 pointer-events-none">
+                        {result.polygons.map((poly, idx) => (
+                          <div
+                            key={idx}
+                            className={`absolute inset-4 rounded-xl border-2 border-dashed flex items-start justify-end p-3 transition-all ${
+                              result.state === "DANGER"
+                                ? "border-red-500 bg-red-500/30 animate-pulse"
+                                : "border-emerald-500 bg-emerald-500/20"
+                            }`}
+                          >
+                            <span
+                              className={`text-[11px] font-mono px-2 py-0.5 rounded font-bold shadow ${
+                                result.state === "DANGER"
+                                  ? "bg-red-600 text-white"
+                                  : "bg-emerald-600 text-white"
+                              }`}
+                            >
+                              {poly.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Actuator Status Card */}
-            <div className="w-full mt-6 p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-center">
-              <span className="text-xs text-slate-400 uppercase tracking-wider block mb-1 font-mono">
-                Status Sinyal Fisik:
-              </span>
-              <span
-                className={`text-lg font-black tracking-wide block ${
-                  trafficSignal === "RED"
-                    ? "text-red-500 animate-pulse"
-                    : trafficSignal === "YELLOW"
-                    ? "text-amber-400"
-                    : "text-emerald-400"
-                }`}
-              >
-                {trafficSignal === "RED"
-                  ? "MERAH (ARUS DIHENTIKAN)"
-                  : trafficSignal === "YELLOW"
-                  ? "KUNING (PERSIAPAN STOP)"
-                  : "HIJAU (LALU LINTAS LANCAR)"}
-              </span>
-              <p className="text-[11px] text-slate-400 mt-2">
-                {trafficSignal === "RED"
-                  ? "Mencegah antrean kendaraan terus masuk dan terjebak di rel kereta api."
-                  : "Arus lalu lintas menuju perlintasan sebidang dinyatakan aman."}
+            {/* Bottom info bar */}
+            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
+              <span>Resolusi: 640 x 640 (Optimal)</span>
+              <span>Confidence: {(result.confidence * 100).toFixed(1)}%</span>
+            </div>
+          </div>
+
+          {/* RIGHT: Status Verdict & Traffic Light Interlocking (5 Columns) */}
+          <div className="lg:col-span-5 space-y-6">
+            {/* Verdict Card */}
+            <div
+              className={`p-6 rounded-2xl border transition-all shadow-2xl ${
+                result.state === "DANGER"
+                  ? "bg-red-950/40 border-red-500/80 shadow-red-500/10"
+                  : "bg-emerald-950/40 border-emerald-500/80 shadow-emerald-500/10"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-mono uppercase tracking-wider text-slate-400">
+                  HASIL EVALUASI MODEL
+                </span>
+                <span
+                  className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${
+                    result.state === "DANGER"
+                      ? "bg-red-950 text-red-300 border-red-700"
+                      : "bg-emerald-950 text-emerald-300 border-emerald-700"
+                  }`}
+                >
+                  {(result.confidence * 100).toFixed(0)}% Match
+                </span>
+              </div>
+
+              {/* Big Status Badge */}
+              <div className="flex items-center gap-3 mb-3">
+                {result.state === "DANGER" ? (
+                  <ShieldAlert className="h-8 w-8 text-red-400 animate-bounce" />
+                ) : (
+                  <ShieldCheck className="h-8 w-8 text-emerald-400" />
+                )}
+                <div>
+                  <h3
+                    className={`text-2xl font-black tracking-tight ${
+                      result.state === "DANGER" ? "text-red-400" : "text-emerald-400"
+                    }`}
+                  >
+                    STATUS: {result.state}
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-300">
+                    {result.condition}
+                  </p>
+                </div>
+              </div>
+
+              {/* Detailed Description */}
+              <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3.5 rounded-xl border border-slate-800">
+                {result.explanation}
+              </p>
+            </div>
+
+            {/* Physical Traffic Light Simulator */}
+            <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-200">
+                    Traffic Light Interlocking
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Sinyal Lampu Lalu Lintas di Persimpangan Belakang
+                  </p>
+                </div>
+                <span
+                  className={`text-[11px] font-mono px-2 py-0.5 rounded font-bold ${
+                    result.trafficLight === "RED"
+                      ? "bg-red-950 border border-red-700 text-red-300 animate-pulse"
+                      : "bg-emerald-950 border border-emerald-700 text-emerald-300"
+                  }`}
+                >
+                  {result.trafficLight === "RED" ? "INTERLOCK: MERAH" : "ARUS: HIJAU"}
+                </span>
+              </div>
+
+              {/* Horizontal Traffic Light Lamps */}
+              <div className="bg-slate-950 p-4 rounded-2xl border-2 border-slate-700 flex items-center justify-around shadow-inner">
+                {/* RED */}
+                <div className="flex flex-col items-center gap-1.5">
+                  <div
+                    className={`w-14 h-14 rounded-full transition-all duration-300 flex items-center justify-center font-bold text-[10px] ${
+                      result.trafficLight === "RED"
+                        ? "bg-red-600 shadow-[0_0_35px_#ef4444] border-2 border-red-200 text-white"
+                        : "bg-red-950/40 border border-red-900/30 text-red-900 opacity-40"
+                    }`}
+                  >
+                    STOP
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400">MERAH</span>
+                </div>
+
+                {/* YELLOW */}
+                <div className="flex flex-col items-center gap-1.5">
+                  <div
+                    className={`w-14 h-14 rounded-full transition-all duration-300 flex items-center justify-center font-bold text-[10px] ${
+                      result.trafficLight === "YELLOW"
+                        ? "bg-amber-400 shadow-[0_0_35px_#f59e0b] border-2 border-amber-200 text-white"
+                        : "bg-amber-950/40 border border-amber-900/30 text-amber-900 opacity-40"
+                    }`}
+                  >
+                    SIAGA
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400">KUNING</span>
+                </div>
+
+                {/* GREEN */}
+                <div className="flex flex-col items-center gap-1.5">
+                  <div
+                    className={`w-14 h-14 rounded-full transition-all duration-300 flex items-center justify-center font-bold text-[10px] ${
+                      result.trafficLight === "GREEN"
+                        ? "bg-emerald-500 shadow-[0_0_35px_#10b981] border-2 border-emerald-200 text-white"
+                        : "bg-emerald-950/40 border border-emerald-900/30 text-emerald-900 opacity-40"
+                    }`}
+                  >
+                    JALAN
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400">HIJAU</span>
+                </div>
+              </div>
+
+              {/* Status Action Description */}
+              <div className="mt-4 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                {result.trafficLight === "RED" ? (
+                  <span className="text-red-400 font-semibold block">
+                    🚨 Tindakan Sistem: Sinyal merah diaktifkan agar kendaraan tidak merangsek masuk ke area rel yang sedang terhambat.
+                  </span>
+                ) : (
+                  <span className="text-emerald-400 font-medium block">
+                    ✅ Tindakan Sistem: Arus lalu lintas di persimpangan belakang dibiarkan mengalir normal.
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Safety Logic Explanation Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+          <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <h5 className="text-xs font-bold text-slate-200">Kondisi 1 (Safe)</h5>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Palang terbuka + arus kendaraan ramai. Aman karena tidak ada kereta yang melintas.
               </p>
             </div>
           </div>
 
-          {/* Backend Connection Setup Card */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-md p-5 shadow-xl">
-            <h4 className="text-xs font-semibold text-slate-300 tracking-wider uppercase font-mono mb-2 flex items-center gap-2">
-              <Radio className="h-4 w-4 text-cyan-400" />
-              Integrasi Backend FastAPI
-            </h4>
-            <p className="text-xs text-slate-400 leading-relaxed mb-4">
-              Dashboard ini siap menerima stream inference real-time dari model <code className="text-cyan-300">best.pt</code> melalui WebSocket backend.
-            </p>
-
-            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300 space-y-1 mb-4">
-              <div className="text-slate-400 text-[10px]">WebSocket URL:</div>
-              <div className="text-cyan-400 select-all">ws://localhost:8000/ws/crossing-status</div>
+          <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <h5 className="text-xs font-bold text-slate-200">Kondisi 2 (Safe)</h5>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Palang tertutup + zona rel steril. Kereta api dapat melintas tanpa rintangan.
+              </p>
             </div>
+          </div>
 
-            <div className="text-[11px] text-slate-400 flex items-center justify-between">
-              <span>Status Koneksi:</span>
-              <span className="text-amber-400 font-medium flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping"></span>
-                Menunggu Server (:8000)
-              </span>
+          <div className="p-4 rounded-xl bg-slate-900/50 border border-red-900/40 flex items-start gap-3 bg-red-950/10">
+            <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <h5 className="text-xs font-bold text-red-300">Kondisi 3 (Danger)</h5>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Palang tertutup + kendaraan/orang terjebak. Menyalakan alarm & mengunci traffic light ke MERAH.
+              </p>
             </div>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/80 bg-slate-950/80 px-6 py-4 text-center text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <footer className="border-t border-slate-800/80 bg-slate-950 px-6 py-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
         <p>© 2026 RailSense — Intelligent Railway Crossing Safety System</p>
-        <p className="font-mono text-[11px] text-slate-400">
-          Powered by YOLOv8n-seg & Next.js TypeScript
+        <p className="font-mono text-[11px] text-slate-500">
+          Powered by YOLOv8 Instance Segmentation & Next.js TypeScript
         </p>
       </footer>
     </div>

@@ -36,7 +36,7 @@ Sistem RailSense mengklasifikasikan kondisi operasional menjadi 3 aturan logika 
 * **Target Kelas**:
   1. `[0] danger`: Kendaraan/rintangan yang terjebak di zona rel saat palang tertutup.
   2. `[1] safe`: Palang terbuka normal atau perlintasan bersih tanpa gangguan.
-* **Hardware Akselerasi**: Dilatih dan dioptimalkan pada **NVIDIA GeForce RTX 2050** dengan akselerasi **CUDA 12.4**.
+* **Hardware Akselerasi**: Dilatih dan dioptimalkan dengan akselerasi **NVIDIA GPU (CUDA)**.
 
 ---
 
@@ -89,7 +89,7 @@ RailSense/
 ├── README.md                 # Dokumentasi utama proyek
 ├── best.pt                   # Bobot model YOLOv8-seg terbaik hasil training
 ├── yolov8n-seg.pt            # Pretrained base model
-├── train_model.ipynb         # Notebook training GPU lokal (RTX 2050)
+├── train_model.ipynb         # Notebook training GPU lokal (CUDA)
 ├── test_model.ipynb          # Notebook verifikasi & simulasi interlocking
 ├── dataset_tambahan/         # 52 Gambar poligon (danger vs safe)
 ├── seg_dataset/              # Dataset split (train 80% : valid 20%)
@@ -130,7 +130,7 @@ Buka browser pada alamat `http://localhost:3000`.
 
 ## 🔮 8. Roadmap Pengembangan Selanjutnya
 - [x] Kurasi dataset spesifik (52 gambar poligon Danger vs Safe).
-- [x] Training model Instance Segmentation di NVIDIA RTX 2050 (CUDA 12.4).
+- [x] Training model Instance Segmentation dengan akselerasi GPU (CUDA).
 - [x] Validasi logika keselamatan & simulasi respons traffic light.
 - [ ] Implementasi Backend FastAPI dengan WebSocket stream.
 - [ ] Integrasi feed CCTV publik / RTSP Dishub secara langsung.

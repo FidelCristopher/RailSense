@@ -1,11 +1,20 @@
-# 🚆 RailSense
-### *Intelligent Railway Crossing & Traffic Light Interlocking System*
+<p align="center">
+  <img src="TrainSense-Logo.png" alt="RailSense Logo" width="220" />
+</p>
 
-[![Computer Vision](https://img.shields.io/badge/Computer%20Vision-YOLOv8--seg-blue?style=for-the-badge&logo=yolo)](https://ultralytics.com)
-[![PyTorch](https://img.shields.io/badge/PyTorch-CUDA%2012.4-EE4C2C?style=for-the-badge&logo=pytorch)](https://pytorch.org)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014%20(TS)-black?style=for-the-badge&logo=nextdotjs)](https://nextjs.org)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+<h1 align="center">🚆 RailSense</h1>
+<p align="center">
+  <strong>Intelligent Railway Crossing & Traffic Light Interlocking System</strong><br />
+  <em>Sistem Keselamatan Perlintasan Sebidang Berbasis Computer Vision & Aktuasi Lampu Lalu Lintas Cerdas</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Computer%20Vision-YOLOv8--seg-blue?style=for-the-badge&logo=yolo" alt="YOLOv8" />
+  <img src="https://img.shields.io/badge/PyTorch-CUDA%20Acceleration-EE4C2C?style=for-the-badge&logo=pytorch" alt="PyTorch" />
+  <img src="https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Frontend-Next.js%2014%20(TS)-black?style=for-the-badge&logo=nextdotjs" alt="Next.js" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
+</p>
 
 ---
 
@@ -58,83 +67,79 @@ Sistem RailSense mengklasifikasikan kondisi operasional menjadi 3 aturan logika 
                                │
                                ▼
             [ Frontend Web Dashboard (Next.js + TypeScript) ]
-              ├── 📺 Live CCTV Stream dengan Mask Overlay
-              ├── 🚦 Digital Traffic Light Interlocking Indicator
-              ├── 🚨 Alarm Peringatan Darurat
-              └── 📋 Riwayat Log Insiden Real-time
+              ├── 🖼️ Image Upload & Interactive AI Detection (Default View)
+              ├── 📺 Floating Live CCTV Stream Preview (Hover on Top)
+              ├── 🚦 Digital Traffic Light Interlocking Simulator
+              └── 🚨 Alarm Peringatan Darurat
 ```
 
 ---
 
-## 💻 5. Tech Stack
-
-### Frontend:
-* **Framework**: [Next.js](https://nextjs.org/) (App Router, React 18/19)
-* **Bahasa**: [TypeScript](https://www.typescriptlang.org/)
-* **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-* **Komunikasi**: WebSocket Client + REST Fetch
-
-### Backend (Rekomendasi):
-* **Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Python Asynchronous ASGI)
-* **Computer Vision**: [Ultralytics YOLOv8](https://docs.ultralytics.com/) & [OpenCV (cv2)](https://opencv.org/)
-* **Deep Learning Runtime**: [PyTorch with CUDA 12.4](https://pytorch.org/)
-* **Server**: Uvicorn ASGI Server
-
----
-
-## 📁 6. Struktur Direktori Proyek
+## 📁 5. Struktur Direktori Proyek yang Rapi
 
 ```text
 RailSense/
+├── TrainSense-Logo.png       # Logo resmi RailSense (.PNG)
 ├── README.md                 # Dokumentasi utama proyek
 ├── best.pt                   # Bobot model YOLOv8-seg terbaik hasil training
-├── yolov8n-seg.pt            # Pretrained base model
+├── yolov8n-seg.pt            # Pretrained base model segmentasi
+├── yolov8n.pt                # Pretrained base model deteksi
 ├── train_model.ipynb         # Notebook training GPU lokal (CUDA)
 ├── test_model.ipynb          # Notebook verifikasi & simulasi interlocking
-├── dataset_tambahan/         # 52 Gambar poligon (danger vs safe)
-├── seg_dataset/              # Dataset split (train 80% : valid 20%)
 │
-├── frontend/                 # Web Dashboard (Next.js + TypeScript)
+├── datasets/                 # Manajemen dataset terstruktur
+│   ├── dataset_tambahan/     # 52 Data poligon utama (danger vs safe)
+│   ├── seg_dataset/          # Dataset aktif hasil split train (80%) & valid (20%)
+│   └── archive/              # Arsip dataset eksperimen sebelumnya
+│       ├── Danger/
+│       ├── Safe/
+│       ├── Standby/
+│       ├── custom_dataset/
+│       ├── dataset/
+│       ├── label/
+│       └── rail-road-crossing.v1i.yolov8/
+│
+├── frontend/                 # Web Dashboard (Next.js 14 + TypeScript + Tailwind)
 │   ├── app/
-│   │   ├── page.tsx          # Halaman utama dashboard monitoring
+│   │   ├── page.tsx          # Landing page (Image Detection + Hover Live CCTV)
 │   │   ├── layout.tsx
 │   │   └── globals.css
-│   ├── components/           # Komponen UI (TrafficLight, LiveStream, LogTable)
+│   ├── public/               # Asset statis (logo.png, sample images)
 │   └── package.json
 │
 └── backend/                  # API & Engine Inferensi (FastAPI)
-    ├── main.py
+    ├── main.py               # WebSocket & REST API server
     └── requirements.txt
 ```
 
 ---
 
-## 🚀 7. Panduan Menjalankan Sistem
+## 🚀 6. Panduan Menjalankan Sistem
 
-### A. Persiapan Lingkungan Model & Python
-Pastikan PyTorch dengan CUDA telah terpasang:
-```bash
-# Uji model inferensi lokal
-# Buka test_model.ipynb di VS Code dan jalankan pengujian
-```
+### A. Uji Coba Model di VS Code
+Buka file **`test_model.ipynb`** di VS Code untuk menguji kemampuan segmentasi poligon dan simulasi respons lampu lalu lintas.
 
 ### B. Menjalankan Frontend Web (Next.js)
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
-Buka browser pada alamat `http://localhost:3000`.
+Buka browser pada alamat: **`http://localhost:3000`**
+
+Fitur di halaman utama:
+1. **Input Gambar**: Unggah foto perlintasan kereta untuk dideteksi oleh AI (*SAFE* vs *DANGER*).
+2. **Preset 1-Klik**: Uji cepat menggunakan sampel kasus nyata (Bus Terjebak, Palang Tertutup Bersih, Palang Terbuka).
+3. **Hover CCTV Monitor**: Arahkan kursor ke tombol **"Live CCTV Streams"** di bilah navigasi atas untuk melihat live feed tanpa berpindah halaman.
 
 ---
 
-## 🔮 8. Roadmap Pengembangan Selanjutnya
+## 🔮 7. Roadmap Pengembangan
 - [x] Kurasi dataset spesifik (52 gambar poligon Danger vs Safe).
 - [x] Training model Instance Segmentation dengan akselerasi GPU (CUDA).
 - [x] Validasi logika keselamatan & simulasi respons traffic light.
-- [ ] Implementasi Backend FastAPI dengan WebSocket stream.
-- [ ] Integrasi feed CCTV publik / RTSP Dishub secara langsung.
-- [ ] Pengujian lapangan dengan modul IoT ESP32 untuk mengontrol traffic light fisik.
+- [x] Frontend Web Next.js TypeScript dengan Image Upload & Hover CCTV Monitor.
+- [ ] Implementasi integrasi WebSocket realtime antara backend FastAPI dan frontend.
+- [ ] Pengujian lapangan dengan mikrokontroler IoT (ESP32) untuk aktuator traffic light fisik.
 
 ---
 **RailSense Team** © 2026. *Building Smarter, Safer Crossings with Computer Vision.*

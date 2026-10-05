@@ -218,7 +218,7 @@ export default function RailSenseApp() {
         <div className="flex items-center gap-3">
           <div className="relative h-11 w-11 rounded-xl overflow-hidden border border-cyan-500/40 shadow-lg shadow-cyan-500/10">
             <Image
-              src="/logo.jpeg"
+              src="/logo.png"
               alt="RailSense Logo"
               fill
               className="object-cover"

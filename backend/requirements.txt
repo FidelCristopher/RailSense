@@ -5,3 +5,4 @@ opencv-python>=4.9.0
 torch
 torchvision
 websockets
+yt-dlp>=2024.0.0

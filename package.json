@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
+    "backend": "C:\\Users\\Pongo\\Documents\\LATIHAN-CODING\\Python\\ComputerVision-in-Python\\env-cv\\Scripts\\python.exe backend/main.py",
     "start": "npm --prefix frontend run start"
   },
   "author": "FidelCristopher",

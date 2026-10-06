@@ -125,7 +125,7 @@ class StreamManager:
             if raw_frame is None and self.fallback_images:
                 img_path = self.fallback_images[img_idx % len(self.fallback_images)]
                 raw_frame = cv2.imread(img_path)
-                time.sleep(1.0)  # ganti frame setiap 1 detik untuk simulasi CCTV
+                time.sleep(0.08)  # ~12-15 FPS transisi frame yang dinamis seperti CCTV nyata
                 img_idx += 1
 
             if raw_frame is None:
@@ -194,14 +194,20 @@ stream_thread.start()
 
 # 4. HTTP Endpoint Streaming MJPEG (/video_feed)
 def generate_mjpeg():
+    last_sent = None
     while True:
         with frame_lock:
             frame = latest_annotated_frame
 
-        if frame:
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-        time.sleep(0.033)  # ~30 FPS
+        if frame and frame != last_sent:
+            last_sent = frame
+            header = (
+                b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n'
+                b'Content-Length: ' + str(len(frame)).encode() + b'\r\n\r\n'
+            )
+            yield header + frame + b'\r\n'
+        time.sleep(0.04)  # ~25 FPS check
 
 @app.get("/video_feed")
 def video_feed():

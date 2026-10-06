@@ -21,6 +21,8 @@ import {
   RotateCcw,
   Wifi,
   WifiOff,
+  X,
+  ExternalLink,
 } from "lucide-react";
 
 type SystemState = "SAFE" | "DANGER" | "STANDBY";
@@ -37,7 +39,7 @@ interface DetectionResult {
 
 export default function RailSensePage() {
   // Navigation & Dropdown State
-  const [isCctvHovered, setIsCctvHovered] = useState(false);
+  const [isCctvModalOpen, setIsCctvModalOpen] = useState(false);
   const [selectedJunction, setSelectedJunction] = useState("JPL 04 Bandung (Live HLS Simulation)");
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [currentTime, setCurrentTime] = useState("");
@@ -71,6 +73,7 @@ export default function RailSensePage() {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   // Clock
   useEffect(() => {
@@ -202,7 +205,7 @@ export default function RailSensePage() {
         });
       }
       setIsAnalyzing(false);
-    }, 250);
+    }, 200);
   };
 
   // Handle custom file upload
@@ -254,7 +257,7 @@ export default function RailSensePage() {
           });
         }
         setIsAnalyzing(false);
-      }, 300);
+      }, 250);
     }
   };
 
@@ -300,17 +303,27 @@ export default function RailSensePage() {
           </span>
         </div>
 
-        {/* Center / Right: Live CCTV Hover Trigger & Actions */}
+        {/* Center / Right: Live CCTV Trigger & Actions */}
         <div className="flex items-center gap-4">
-          {/* HOVER LIVE CCTV BUTTON (CARA 2: STREAM AI BERARSIR POLIGON DARI BACKEND) */}
+          {/* HOVER & CLICK PERSISTENT MODAL CONTAINER (No dead zones) */}
           <div
             className="relative"
-            onMouseEnter={() => setIsCctvHovered(true)}
-            onMouseLeave={() => setIsCctvHovered(false)}
+            onMouseEnter={() => setIsCctvModalOpen(true)}
+            onMouseLeave={(e) => {
+              // Only close if mouse left completely
+              const rect = e.currentTarget.getBoundingClientRect();
+              if (
+                e.clientY < rect.top ||
+                e.clientX < rect.left ||
+                e.clientX > rect.right
+              ) {
+                setIsCctvModalOpen(false);
+              }
+            }}
           >
             <button
-              onClick={() => setIsCctvHovered(!isCctvHovered)}
-              className="px-5 py-2.5 rounded-full bg-neutral-900 hover:bg-neutral-850 border border-white/10 hover:border-amber-500/50 text-xs font-semibold tracking-wide uppercase flex items-center gap-2.5 text-white shadow-xl transition-all"
+              onClick={() => setIsCctvModalOpen(!isCctvModalOpen)}
+              className="px-5 py-2.5 rounded-full bg-neutral-900 hover:bg-neutral-850 border border-white/10 hover:border-amber-500/50 text-xs font-semibold tracking-wide uppercase flex items-center gap-2.5 text-white shadow-xl transition-all cursor-pointer"
             >
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -319,89 +332,111 @@ export default function RailSensePage() {
               <span>LIVE CCTV API</span>
               <ChevronDown
                 className={`h-3.5 w-3.5 text-neutral-400 transition-transform duration-200 ${
-                  isCctvHovered ? "rotate-180" : ""
+                  isCctvModalOpen ? "rotate-180" : ""
                 }`}
               />
             </button>
 
-            {/* FLOATING HOVER PREVIEW MODAL (CARA 2: REAL-TIME MJPEG AI STREAM) */}
-            {isCctvHovered && (
-              <div className="absolute right-0 mt-3 w-[490px] bg-neutral-900 border border-white/10 rounded-3xl shadow-2xl p-5 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <Radio className="h-4 w-4 text-amber-500 animate-pulse" />
-                    <span className="text-xs font-bold text-white uppercase tracking-wider">
-                      Backend Live Stream (YOLOv8-seg Active)
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                    MJPEG AI FEED
-                  </span>
-                </div>
-
-                <div className="mb-3">
-                  <label className="text-[10px] text-neutral-400 font-mono uppercase tracking-widest block mb-1">
-                    Titik Kamera Terhubung:
-                  </label>
-                  <select
-                    value={selectedJunction}
-                    onChange={(e) => setSelectedJunction(e.target.value)}
-                    className="w-full bg-neutral-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
-                  >
-                    <option>JPL 04 Bandung (Live AI Stream :8000)</option>
-                    <option>JPL 101 Surakarta (Purwosari Stream)</option>
-                    <option>JPL 12 Yogyakarta (Lempuyangan)</option>
-                    <option>YouTube Live Perlintasan Kereta (yt-dlp)</option>
-                  </select>
-                </div>
-
-                {/* CCTV Monitor Window: Plays /video_feed from FastAPI */}
-                <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-white/5 flex items-center justify-center">
-                  {/* CARA 2: Stream MJPEG Berarsir Poligon Langsung dari FastAPI Backend */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="http://localhost:8000/video_feed"
-                    alt="RailSense Live Stream with Polygons"
-                    className="w-full h-full object-contain"
-                    onError={() => setStreamError(true)}
-                  />
-
-                  {/* Fallback overlay if backend server is not active */}
-                  {streamError && !isBackendConnected && (
-                    <div className="absolute inset-0 bg-neutral-950/90 flex flex-col items-center justify-center p-4 text-center">
-                      <WifiOff className="h-6 w-6 text-neutral-500 mb-2" />
-                      <p className="text-xs text-neutral-300 font-medium">
-                        Backend Stream Server Belum Menyala (:8000)
-                      </p>
-                      <code className="text-[10px] text-amber-400 font-mono mt-1 bg-black/60 px-2 py-0.5 rounded border border-white/5">
-                        python backend/main.py
-                      </code>
+            {/* INVISIBLE BRIDGE + FLOATING MODAL WINDOW (Zero gap bug) */}
+            {isCctvModalOpen && (
+              <div
+                className="absolute right-0 pt-2 w-[480px] z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                onMouseLeave={() => setIsCctvModalOpen(false)}
+              >
+                <div className="bg-neutral-900/98 border border-white/15 rounded-3xl shadow-2xl p-5 backdrop-blur-2xl">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Radio className="h-4 w-4 text-amber-500 animate-pulse" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">
+                        Backend Live Stream (YOLOv8-seg Active)
+                      </span>
                     </div>
-                  )}
-
-                  {/* On-screen telemetry */}
-                  <div className="absolute top-3 left-3 text-[10px] font-mono bg-black/80 px-2.5 py-0.5 rounded-full text-amber-400 border border-amber-500/20 flex items-center gap-1.5 pointer-events-none">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping"></span>
-                    <span>AI MASK LIVE • 30 FPS</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        LIVE FEED
+                      </span>
+                      <button
+                        onClick={() => setIsCctvModalOpen(false)}
+                        className="p-1 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono bg-black/80 px-3 py-1.5 rounded-xl border border-white/5 pointer-events-none">
-                    <span className="truncate max-w-[280px] text-white font-medium">
-                      {selectedJunction}
-                    </span>
-                    <span className="text-amber-400">{currentTime}</span>
-                  </div>
-                </div>
 
-                <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-neutral-400">
-                  <div className="flex items-center gap-1.5">
-                    {isBackendConnected ? (
-                      <Wifi className="h-3 w-3 text-emerald-400" />
-                    ) : (
-                      <WifiOff className="h-3 w-3 text-neutral-500" />
+                  <div className="mb-3">
+                    <label className="text-[10px] text-neutral-400 font-mono uppercase tracking-widest block mb-1">
+                      Pilih Titik Kamera:
+                    </label>
+                    <select
+                      value={selectedJunction}
+                      onChange={(e) => setSelectedJunction(e.target.value)}
+                      className="w-full bg-neutral-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
+                    >
+                      <option>JPL 04 Bandung (Live AI Stream :8000)</option>
+                      <option>JPL 101 Surakarta (Purwosari Stream)</option>
+                      <option>JPL 12 Yogyakarta (Lempuyangan)</option>
+                      <option>YouTube Live Perlintasan Kereta (yt-dlp)</option>
+                    </select>
+                  </div>
+
+                  {/* CCTV Monitor Window: Plays /video_feed from FastAPI */}
+                  <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-white/10 flex items-center justify-center">
+                    {/* Live Stream MJPEG image */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="http://localhost:8000/video_feed?view=hover"
+                      alt="RailSense Live Stream with Polygons"
+                      className="w-full h-full object-contain"
+                      onError={() => setStreamError(true)}
+                    />
+
+                    {/* Fallback overlay if backend server is not reachable */}
+                    {streamError && !isBackendConnected && (
+                      <div className="absolute inset-0 bg-neutral-950/90 flex flex-col items-center justify-center p-4 text-center">
+                        <WifiOff className="h-6 w-6 text-neutral-500 mb-2" />
+                        <p className="text-xs text-neutral-300 font-medium">
+                          Backend Stream Server Belum Menyala (:8000)
+                        </p>
+                        <code className="text-[10px] text-amber-400 font-mono mt-1 bg-black/60 px-2 py-0.5 rounded border border-white/5">
+                          python backend/main.py
+                        </code>
+                      </div>
                     )}
-                    <span>{isBackendConnected ? "Server Aktif (FastAPI :8000)" : "Menunggu Server (:8000)"}</span>
+
+                    {/* On-screen telemetry */}
+                    <div className="absolute top-3 left-3 text-[10px] font-mono bg-black/80 px-2.5 py-0.5 rounded-full text-amber-400 border border-amber-500/20 flex items-center gap-1.5 pointer-events-none">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                      <span>AI MASK LIVE • 30 FPS</span>
+                    </div>
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono bg-black/80 px-3 py-1.5 rounded-xl border border-white/5 pointer-events-none">
+                      <span className="truncate max-w-[260px] text-white font-medium">
+                        {selectedJunction}
+                      </span>
+                      <span className="text-amber-400">{currentTime}</span>
+                    </div>
                   </div>
-                  <span className="text-amber-400 font-mono">Format: MJPEG Stream</span>
+
+                  <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-neutral-400">
+                    <div className="flex items-center gap-1.5">
+                      {isBackendConnected ? (
+                        <Wifi className="h-3 w-3 text-emerald-400" />
+                      ) : (
+                        <WifiOff className="h-3 w-3 text-neutral-500" />
+                      )}
+                      <span>{isBackendConnected ? "Server Aktif (FastAPI :8000)" : "Menunggu Server (:8000)"}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setIsCctvModalOpen(false);
+                        setIsLiveStreamMode(true);
+                        stageRef.current?.scrollIntoView({ behavior: "smooth" });
+                      }}
+                      className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition"
+                    >
+                      Buka di Layar Utama <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -455,7 +490,7 @@ export default function RailSensePage() {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-7 py-3.5 rounded-full bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-xl shadow-amber-500/20 transition-transform active:scale-95"
+            className="px-7 py-3.5 rounded-full bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-xl shadow-amber-500/20 transition-transform active:scale-95 cursor-pointer"
           >
             <Upload className="h-4 w-4 stroke-[2.5]" />
             <span>Unggah Gambar Anda</span>
@@ -465,8 +500,9 @@ export default function RailSensePage() {
             onClick={() => {
               setIsLiveStreamMode(true);
               setStreamError(false);
+              stageRef.current?.scrollIntoView({ behavior: "smooth" });
             }}
-            className={`px-6 py-3.5 rounded-full border text-xs uppercase tracking-wider flex items-center gap-2 transition font-semibold ${
+            className={`px-6 py-3.5 rounded-full border text-xs uppercase tracking-wider flex items-center gap-2 transition font-semibold cursor-pointer ${
               isLiveStreamMode
                 ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-lg shadow-amber-500/10"
                 : "bg-neutral-900 hover:bg-neutral-850 border-white/10 text-neutral-200"
@@ -479,7 +515,10 @@ export default function RailSensePage() {
       </section>
 
       {/* INTERACTIVE BENTO GRID STAGE */}
-      <section className="bg-neutral-950 py-16 px-6 md:px-12 relative z-20 rounded-t-[40px] border-t border-white/5">
+      <section
+        ref={stageRef}
+        className="bg-neutral-950 py-16 px-6 md:px-12 relative z-20 rounded-t-[40px] border-t border-white/5"
+      >
         <div className="max-w-7xl mx-auto">
           {/* Section Header */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
@@ -497,7 +536,7 @@ export default function RailSensePage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => handleSelectSample("danger")}
-                className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide uppercase transition-all border ${
+                className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide uppercase transition-all border cursor-pointer ${
                   !isLiveStreamMode && uploadedImage.includes("danger")
                     ? "bg-red-500/20 border-red-500 text-red-300 shadow-lg shadow-red-500/20"
                     : "bg-neutral-900 border-white/5 text-neutral-400 hover:text-white"
@@ -507,7 +546,7 @@ export default function RailSensePage() {
               </button>
               <button
                 onClick={() => handleSelectSample("safe_closed")}
-                className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide uppercase transition-all border ${
+                className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide uppercase transition-all border cursor-pointer ${
                   !isLiveStreamMode && uploadedImage.includes("empty")
                     ? "bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/20"
                     : "bg-neutral-900 border-white/5 text-neutral-400 hover:text-white"
@@ -517,7 +556,7 @@ export default function RailSensePage() {
               </button>
               <button
                 onClick={() => handleSelectSample("safe_open")}
-                className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide uppercase transition-all border ${
+                className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide uppercase transition-all border cursor-pointer ${
                   !isLiveStreamMode && uploadedImage.includes("open")
                     ? "bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-lg shadow-emerald-500/20"
                     : "bg-neutral-900 border-white/5 text-neutral-400 hover:text-white"
@@ -542,14 +581,16 @@ export default function RailSensePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {isLiveStreamMode ? (
-                      <span className="px-3 py-1 rounded-full text-[11px] font-mono bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping"></span>
-                        Streaming Aktif
-                      </span>
+                      <button
+                        onClick={() => setIsLiveStreamMode(false)}
+                        className="px-3 py-1 rounded-full text-[11px] font-mono bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-white/10 transition cursor-pointer"
+                      >
+                        Beralih ke Gambar Statis
+                      </button>
                     ) : (
                       <button
                         onClick={() => setShowMask(!showMask)}
-                        className={`px-3 py-1 rounded-full text-[11px] font-mono border transition flex items-center gap-1.5 ${
+                        className={`px-3 py-1 rounded-full text-[11px] font-mono border transition flex items-center gap-1.5 cursor-pointer ${
                           showMask
                             ? "bg-amber-500/10 border-amber-500/40 text-amber-300"
                             : "bg-neutral-950 border-white/10 text-neutral-400"
@@ -576,7 +617,7 @@ export default function RailSensePage() {
                     <div className="relative w-full h-full flex items-center justify-center bg-black">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src="http://localhost:8000/video_feed"
+                        src="http://localhost:8000/video_feed?view=main"
                         alt="Live Stream Feed with Polygons"
                         className="w-full h-full object-contain"
                         onError={() => setStreamError(true)}
@@ -595,7 +636,7 @@ export default function RailSensePage() {
                           </code>
                           <button
                             onClick={() => setIsLiveStreamMode(false)}
-                            className="mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-neutral-850 hover:bg-neutral-800 text-neutral-300 border border-white/10"
+                            className="mt-4 px-4 py-1.5 rounded-full text-xs font-semibold bg-neutral-850 hover:bg-neutral-800 text-neutral-300 border border-white/10 cursor-pointer"
                           >
                             Kembali ke Mode Gambar Statis
                           </button>

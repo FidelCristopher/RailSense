@@ -1,0 +1,12 @@
+{
+  "name": "railsense",
+  "version": "1.0.0",
+  "description": "RailSense - Intelligent Railway Crossing Safety & Traffic Light Interlocking System",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run start"
+  },
+  "author": "FidelCristopher",
+  "license": "MIT"
+}

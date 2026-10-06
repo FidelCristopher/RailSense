@@ -22,7 +22,8 @@ import {
   Wifi,
   WifiOff,
   X,
-  ExternalLink,
+  Link as LinkIcon,
+  Send,
 } from "lucide-react";
 
 type SystemState = "SAFE" | "DANGER" | "STANDBY";
@@ -37,12 +38,36 @@ interface DetectionResult {
   polygons?: { points: string; color: string; label: string }[];
 }
 
+const PRESET_STREAMS = [
+  {
+    name: "Perlintasan Kereta Api Balecatur Yogyakarta",
+    url: "https://www.youtube.com/watch?v=wDfaAyOyYDQ",
+  },
+  {
+    name: "Kompilasi Perlintasan Kereta DKI Jakarta",
+    url: "https://www.youtube.com/watch?v=kHanz-X2zC8",
+  },
+  {
+    name: "Live HLS Public Stream (Test Channel)",
+    url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+  },
+  {
+    name: "Webcam Lokal (Kamera Laptop / USB)",
+    url: "0",
+  },
+];
+
 export default function RailSensePage() {
   // Navigation & Dropdown State
   const [isCctvModalOpen, setIsCctvModalOpen] = useState(false);
-  const [selectedJunction, setSelectedJunction] = useState("JPL 04 Bandung (Live HLS Simulation)");
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [currentTime, setCurrentTime] = useState("");
+
+  // Stream Manager State
+  const [selectedStreamUrl, setSelectedStreamUrl] = useState(PRESET_STREAMS[0].url);
+  const [customStreamInput, setCustomStreamInput] = useState("");
+  const [activeStreamTitle, setActiveStreamTitle] = useState(PRESET_STREAMS[0].name);
+  const [isSwitchingStream, setIsSwitchingStream] = useState(false);
 
   // Backend Connection & Stream Feed Mode
   const [isBackendConnected, setIsBackendConnected] = useState(false);
@@ -96,7 +121,6 @@ export default function RailSensePage() {
         ws = new WebSocket("ws://localhost:8000/ws/crossing-status");
 
         ws.onopen = () => {
-          console.log("[RailSense] Terhubung ke WebSocket Backend :8000");
           setIsBackendConnected(true);
         };
 
@@ -115,6 +139,9 @@ export default function RailSensePage() {
                     : "Perlintasan dalam pemantauan normal tanpa ada objek kritis yang terjebak.",
                 trafficLight: data.traffic_light || "GREEN",
               });
+              if (data.source_name) {
+                setActiveStreamTitle(data.source_name);
+              }
             }
           } catch {
             // Ignore parse errors
@@ -143,6 +170,26 @@ export default function RailSensePage() {
       ws?.close();
     };
   }, [isLiveStreamMode]);
+
+  // Function to switch stream in backend
+  const applyStreamSource = async (url: string, title: string) => {
+    setIsSwitchingStream(true);
+    setSelectedStreamUrl(url);
+    setActiveStreamTitle(title);
+    setStreamError(false);
+
+    try {
+      await fetch("http://localhost:8000/api/set_source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, name: title }),
+      });
+    } catch (e) {
+      console.error("Gagal mengubah sumber stream backend:", e);
+    } finally {
+      setIsSwitchingStream(false);
+    }
+  };
 
   // Handle preset sample selection
   const handleSelectSample = (sampleType: "danger" | "safe_closed" | "safe_open") => {
@@ -284,7 +331,7 @@ export default function RailSensePage() {
   }, [result.state, soundEnabled]);
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white selection:bg-amber-500 selection:text-black">
+    <div className="min-h-screen bg-neutral-950 text-white selection:bg-amber-500 selection:text-black font-sans">
       {/* Top Floating Minimalist Navbar (Golda Aesthetic) */}
       <nav className="fixed top-0 left-0 right-0 z-50 px-6 md:px-12 py-5 flex items-center justify-between backdrop-blur-md bg-neutral-950/70 border-b border-white/5 transition-all">
         {/* Brand Mark */}
@@ -305,12 +352,11 @@ export default function RailSensePage() {
 
         {/* Center / Right: Live CCTV Trigger & Actions */}
         <div className="flex items-center gap-4">
-          {/* HOVER & CLICK PERSISTENT MODAL CONTAINER (No dead zones) */}
+          {/* HOVER & CLICK PERSISTENT MODAL CONTAINER */}
           <div
             className="relative"
             onMouseEnter={() => setIsCctvModalOpen(true)}
             onMouseLeave={(e) => {
-              // Only close if mouse left completely
               const rect = e.currentTarget.getBoundingClientRect();
               if (
                 e.clientY < rect.top ||
@@ -337,10 +383,10 @@ export default function RailSensePage() {
               />
             </button>
 
-            {/* INVISIBLE BRIDGE + FLOATING MODAL WINDOW (Zero gap bug) */}
+            {/* INVISIBLE BRIDGE + FLOATING MODAL WINDOW */}
             {isCctvModalOpen && (
               <div
-                className="absolute right-0 pt-2 w-[480px] z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                className="absolute right-0 pt-2 w-[500px] z-50 animate-in fade-in slide-in-from-top-1 duration-150"
                 onMouseLeave={() => setIsCctvModalOpen(false)}
               >
                 <div className="bg-neutral-900/98 border border-white/15 rounded-3xl shadow-2xl p-5 backdrop-blur-2xl">
@@ -348,12 +394,12 @@ export default function RailSensePage() {
                     <div className="flex items-center gap-2">
                       <Radio className="h-4 w-4 text-amber-500 animate-pulse" />
                       <span className="text-xs font-bold text-white uppercase tracking-wider">
-                        Backend Live Stream (YOLOv8-seg Active)
+                        Live Stream Feeder (YOLOv8-seg Active)
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        LIVE FEED
+                        ONLINE STREAM
                       </span>
                       <button
                         onClick={() => setIsCctvModalOpen(false)}
@@ -364,20 +410,55 @@ export default function RailSensePage() {
                     </div>
                   </div>
 
+                  {/* Preset Stream Selector */}
                   <div className="mb-3">
                     <label className="text-[10px] text-neutral-400 font-mono uppercase tracking-widest block mb-1">
-                      Pilih Titik Kamera:
+                      PILIH STREAM RESMI (YOUTUBE / HLS):
                     </label>
                     <select
-                      value={selectedJunction}
-                      onChange={(e) => setSelectedJunction(e.target.value)}
+                      value={selectedStreamUrl}
+                      onChange={(e) => {
+                        const target = PRESET_STREAMS.find((s) => s.url === e.target.value);
+                        if (target) {
+                          applyStreamSource(target.url, target.name);
+                        }
+                      }}
                       className="w-full bg-neutral-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
                     >
-                      <option>JPL 04 Bandung (Live AI Stream :8000)</option>
-                      <option>JPL 101 Surakarta (Purwosari Stream)</option>
-                      <option>JPL 12 Yogyakarta (Lempuyangan)</option>
-                      <option>YouTube Live Perlintasan Kereta (yt-dlp)</option>
+                      {PRESET_STREAMS.map((s, idx) => (
+                        <option key={idx} value={s.url}>
+                          {s.name}
+                        </option>
+                      ))}
                     </select>
+                  </div>
+
+                  {/* Input Custom URL Stream */}
+                  <div className="mb-3">
+                    <label className="text-[10px] text-neutral-400 font-mono uppercase tracking-widest block mb-1">
+                      ATAU INPUT LINK YOUTUBE / M3U8 BEBAS:
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Paste link YouTube (https://youtube.com/watch?v=...) atau link m3u8..."
+                        value={customStreamInput}
+                        onChange={(e) => setCustomStreamInput(e.target.value)}
+                        className="flex-1 bg-neutral-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        onClick={() => {
+                          if (customStreamInput.trim()) {
+                            applyStreamSource(customStreamInput.trim(), "Custom URL Stream");
+                            setCustomStreamInput("");
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold uppercase transition flex items-center gap-1"
+                      >
+                        <Send className="h-3 w-3" />
+                        <span>Koneksi</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* CCTV Monitor Window: Plays /video_feed from FastAPI */}
@@ -399,7 +480,7 @@ export default function RailSensePage() {
                           Backend Stream Server Belum Menyala (:8000)
                         </p>
                         <code className="text-[10px] text-amber-400 font-mono mt-1 bg-black/60 px-2 py-0.5 rounded border border-white/5">
-                          python backend/main.py
+                          run_backend
                         </code>
                       </div>
                     )}
@@ -410,8 +491,8 @@ export default function RailSensePage() {
                       <span>AI MASK LIVE • 30 FPS</span>
                     </div>
                     <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono bg-black/80 px-3 py-1.5 rounded-xl border border-white/5 pointer-events-none">
-                      <span className="truncate max-w-[260px] text-white font-medium">
-                        {selectedJunction}
+                      <span className="truncate max-w-[280px] text-white font-medium">
+                        {activeStreamTitle}
                       </span>
                       <span className="text-amber-400">{currentTime}</span>
                     </div>
@@ -432,7 +513,7 @@ export default function RailSensePage() {
                         setIsLiveStreamMode(true);
                         stageRef.current?.scrollIntoView({ behavior: "smooth" });
                       }}
-                      className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition"
+                      className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition cursor-pointer"
                     >
                       Buka di Layar Utama <ArrowRight className="h-3 w-3" />
                     </button>
@@ -457,9 +538,8 @@ export default function RailSensePage() {
         </div>
       </nav>
 
-      {/* HERO SECTION: Golda Style Massive Headline */}
+      {/* HERO SECTION */}
       <section className="relative pt-36 pb-20 px-6 md:px-12 flex flex-col items-center justify-center text-center overflow-hidden">
-        {/* Subtle radial golden glow */}
         <div className="absolute top-1/4 w-[600px] h-[350px] bg-amber-600/10 blur-[130px] rounded-full pointer-events-none -z-10" />
 
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-neutral-900 border border-white/10 text-amber-400 text-xs font-mono uppercase tracking-widest mb-6 shadow-sm">
@@ -576,7 +656,7 @@ export default function RailSensePage() {
                   <div className="flex items-center gap-2">
                     <Layers className="h-4 w-4 text-amber-500" />
                     <span className="text-xs font-bold tracking-wider uppercase text-neutral-300">
-                      {isLiveStreamMode ? "Live Backend Feed (/video_feed)" : "Static Image Stage"}
+                      {isLiveStreamMode ? `Live Feed: ${activeStreamTitle}` : "Static Image Stage"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -613,7 +693,7 @@ export default function RailSensePage() {
                       </span>
                     </div>
                   ) : isLiveStreamMode ? (
-                    /* CARA 2: LIVE STREAM MJPEG DENGAN POLIGON DARI BACKEND */
+                    /* LIVE STREAM MJPEG DENGAN POLIGON DARI BACKEND */
                     <div className="relative w-full h-full flex items-center justify-center bg-black">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -632,7 +712,7 @@ export default function RailSensePage() {
                             Jalankan perintah berikut di terminal backend untuk mengaktifkan streaming AI berarsir poligon:
                           </p>
                           <code className="text-xs text-amber-400 font-mono bg-black/80 px-3 py-1 rounded-lg border border-white/10">
-                            python backend/main.py
+                            run_backend
                           </code>
                           <button
                             onClick={() => setIsLiveStreamMode(false)}
@@ -683,11 +763,16 @@ export default function RailSensePage() {
                 </div>
               </div>
 
-              {/* Sub-label */}
-              <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-neutral-400 font-mono">
+              {/* Sub-label & Source Selector in Stream Mode */}
+              <div className="mt-4 pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-neutral-400 font-mono">
                 <span>Model: YOLOv8n-seg</span>
+                {isLiveStreamMode && (
+                  <span className="text-amber-400 font-semibold truncate max-w-[320px]">
+                    Sumber: {activeStreamTitle}
+                  </span>
+                )}
                 <span>
-                  {isLiveStreamMode ? "Live Inference: Aktif" : `Confidence: ${(result.confidence * 100).toFixed(1)}%`}
+                  {isLiveStreamMode ? "Inference: GPU Live" : `Confidence: ${(result.confidence * 100).toFixed(1)}%`}
                 </span>
               </div>
             </div>
